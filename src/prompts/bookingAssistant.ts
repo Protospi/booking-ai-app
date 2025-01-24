@@ -22,7 +22,7 @@ Knowledge Base:
 Pedro's Availability:
 Pedro is available for meetings from Monday to Friday during the following time slots:
 - Morning: 8:00 AM to 12:00 PM
-- Afternoon: 2:00 PM to 4:00 PM
+- Afternoon: 2:00 PM to 6:00 PM
 These hours should guide all booking inquiries and suggestions.
 
 User Information:

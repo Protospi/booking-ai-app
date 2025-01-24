@@ -1,105 +1,62 @@
 'use client';
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Message } from '@/types/chat';
-import OpenAI from 'openai';
-import { bookingAssistantPrompt } from '@/prompts/bookingAssistant';
-
-const openai = new OpenAI({
-  apiKey: process.env.NEXT_PUBLIC_OPENAI_API_KEY,
-  dangerouslyAllowBrowser: true // Note: In production, you should use API routes instead
-});
+import { ChatEngine } from '@/lib/chatEngine';
 
 export default function ChatInterface() {
-  const systemMessage: Message = {
-    role: 'system',
-    content: bookingAssistantPrompt
-  };
-
-  // Messages for API calls (includes system message)
-  const [apiMessages, setApiMessages] = useState<Message[]>([systemMessage]);
-  
-  // Messages for display (excludes system message)
-  const [displayMessages, setDisplayMessages] = useState<Message[]>([
-    {
-      role: 'assistant',
-      content: 'Hello! How can I help you with your booking today?'
-    }
-  ]);
-
+  const [displayMessages, setDisplayMessages] = useState<Message[]>([]);
   const [inputMessage, setInputMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [streamingResponse, setStreamingResponse] = useState('');
+  const chatEngineRef = useRef<ChatEngine>(new ChatEngine());
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Add ref for the messages container
-  const messagesEndRef = React.useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    // Initialize display messages
+    setDisplayMessages(chatEngineRef.current.getDisplayMessages());
+  }, []);
 
-  // Function to scroll to bottom
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
-  // Effect to scroll on new messages
-  React.useEffect(() => {
+  useEffect(() => {
     scrollToBottom();
-  }, [displayMessages]);
+  }, [displayMessages, isLoading]);
 
   const handleSendMessage = async () => {
     if (!inputMessage.trim()) return;
 
+    // Immediately show user message
     const userMessage: Message = {
       role: 'user',
       content: inputMessage
     };
-
-    // Update both message arrays
-    setApiMessages(prev => [...prev, userMessage]);
     setDisplayMessages(prev => [...prev, userMessage]);
     setInputMessage('');
     setIsLoading(true);
-
-    try {
-      const completion = await openai.chat.completions.create({
-        model: "gpt-4o-mini",
-        messages: [...apiMessages, userMessage].map(msg => ({
-          role: msg.role as 'system' | 'user' | 'assistant',
-          content: msg.content
-        })),
-      });
-
-      const assistantMessage: Message = {
-        role: 'assistant',
-        content: completion.choices[0].message.content || 'Sorry, I could not generate a response.'
-      };
-
-      // Update both message arrays with the assistant's response
-      setApiMessages(prev => [...prev, assistantMessage]);
-      setDisplayMessages(prev => [...prev, assistantMessage]);
-    } catch (error) {
-      console.error('Error calling OpenAI API:', error);
-      const errorMessage: Message = {
-        role: 'assistant',
-        content: 'Sorry, I encountered an error while processing your request.'
-      };
-      setDisplayMessages(prev => [...prev, errorMessage]);
-      setApiMessages(prev => [...prev, errorMessage]);
-    } finally {
-      setIsLoading(false);
-    }
+    setStreamingResponse('');
+    
+    // Get assistant response with streaming
+    const result = await chatEngineRef.current.sendMessage(
+      userMessage.content,
+      (partialResponse: string) => {
+        setStreamingResponse(partialResponse);
+      }
+    );
+    
+    setStreamingResponse('');
+    setDisplayMessages(result.displayMessages);
+    setIsLoading(false);
   };
 
   const handleClearChat = () => {
-    // Reset API messages to only include system message
-    setApiMessages([systemMessage]);
-    // Reset display messages to only include initial greeting
-    setDisplayMessages([
-      {
-        role: 'assistant',
-        content: 'Hello! How can I help you with your booking today?'
-      }
-    ]);
+    const newMessages = chatEngineRef.current.clearChat();
+    setDisplayMessages(newMessages);
   };
 
   return (
-    <div className="w-1/2 bg-zinc-900 rounded-xl p-6 h-[700px] flex flex-col">
+    <div className="w-1/2 bg-zinc-900 rounded-xl p-6 h-[620px] flex flex-col">
       {/* Chat Header with Title and Clear Button */}
       <div className="flex justify-between items-center mb-4 flex-shrink-0">
         <h2 className="text-xl font-semibold text-white">AI Booker</h2>
@@ -143,14 +100,15 @@ export default function ChatInterface() {
           ))}
           {isLoading && (
             <div className="bg-zinc-800 rounded-xl rounded-tl-none max-w-[80%] p-4">
-              <div className="flex gap-2">
-                <div className="animate-bounce">●</div>
-                <div className="animate-bounce delay-100">●</div>
-                <div className="animate-bounce delay-200">●</div>
-              </div>
+              {streamingResponse || (
+                <div className="flex gap-2">
+                  <div className="animate-bounce">●</div>
+                  <div className="animate-bounce delay-100">●</div>
+                  <div className="animate-bounce delay-200">●</div>
+                </div>
+              )}
             </div>
           )}
-          {/* Add div for scrolling reference */}
           <div ref={messagesEndRef} />
         </div>
       </div>
