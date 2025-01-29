@@ -1,58 +1,110 @@
 'use client';
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useRef } from 'react';
 import { Message } from '@/types/chat';
-import { ChatEngine } from '@/lib/chatEngine';
+import { bookingAssistantPrompt } from '@/prompts/conversationalAgent';
 
 export default function ChatInterface() {
-  const [displayMessages, setDisplayMessages] = useState<Message[]>([]);
+  const [messages, setMessages] = useState<Message[]>([{
+    role: 'assistant',
+    content: 'Hello! How can I help you with your booking today?'
+  }]);
   const [inputMessage, setInputMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [streamingResponse, setStreamingResponse] = useState('');
-  const chatEngineRef = useRef<ChatEngine>(new ChatEngine());
   const messagesEndRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    // Initialize display messages
-    setDisplayMessages(chatEngineRef.current.getDisplayMessages());
-  }, []);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
-  useEffect(() => {
-    scrollToBottom();
-  }, [displayMessages, isLoading]);
-
   const handleSendMessage = async () => {
     if (!inputMessage.trim()) return;
 
-    // Immediately show user message
     const userMessage: Message = {
       role: 'user',
       content: inputMessage
     };
-    setDisplayMessages(prev => [...prev, userMessage]);
+
+    // Update messages with user input
+    setMessages(prev => [...prev, userMessage]);
     setInputMessage('');
     setIsLoading(true);
     setStreamingResponse('');
-    
-    // Get assistant response with streaming
-    const result = await chatEngineRef.current.sendMessage(
-      userMessage.content,
-      (partialResponse: string) => {
-        setStreamingResponse(partialResponse);
+
+    try {
+      const response = await fetch('http://54.175.159.119:8000/api/schedule/conversational-agent', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          messages: [
+            { role: 'system', content: bookingAssistantPrompt },
+            ...messages,
+            userMessage
+          ]
+        }),
+      });
+
+      if (!response.ok) throw new Error('Failed to fetch from backend');
+
+      const reader = response.body?.getReader();
+      if (!reader) throw new Error('No reader available');
+
+      const decoder = new TextDecoder();
+      let fullResponse = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        
+        const chunk = decoder.decode(value);
+        const lines = chunk.split('\n').filter(line => line.trim());
+        
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const jsonStr = line.slice(5);
+            if (jsonStr === '[DONE]') continue;
+            
+            try {
+              const json = JSON.parse(jsonStr);
+              if (json.content) {
+                fullResponse += json.content;
+                setStreamingResponse(fullResponse);
+              }
+            } catch (e) {
+              console.error('Error parsing JSON:', e);
+            }
+          }
+        }
       }
-    );
-    
-    setStreamingResponse('');
-    setDisplayMessages(result.displayMessages);
-    setIsLoading(false);
+
+      // Add assistant's response to messages
+      const assistantMessage: Message = {
+        role: 'assistant',
+        content: fullResponse
+      };
+      setMessages(prev => [...prev, assistantMessage]);
+
+    } catch (error) {
+      console.error('Error:', error);
+      const errorMessage: Message = {
+        role: 'assistant',
+        content: 'Sorry, I encountered an error while processing your request.'
+      };
+      setMessages(prev => [...prev, errorMessage]);
+    } finally {
+      setIsLoading(false);
+      setStreamingResponse('');
+      scrollToBottom();
+    }
   };
 
   const handleClearChat = () => {
-    const newMessages = chatEngineRef.current.clearChat();
-    setDisplayMessages(newMessages);
+    setMessages([{
+      role: 'assistant',
+      content: 'Hello! How can I help you with your booking today?'
+    }]);
   };
 
   return (
@@ -86,7 +138,7 @@ export default function ChatInterface() {
       {/* Chat Messages Container */}
       <div className="flex-1 overflow-y-auto mb-6 custom-scrollbar">
         <div className="flex flex-col gap-6 pr-4">
-          {displayMessages.map((message, index) => (
+          {messages.map((message, index) => (
             <div
               key={index}
               className={`${
