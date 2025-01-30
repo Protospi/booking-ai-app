@@ -2,11 +2,13 @@
 import React, { useState, useRef } from 'react';
 import { Message } from '@/types/chat';
 import { bookingAssistantPrompt } from '@/prompts/conversationalAgent';
+import { scheduleAgentPrompt } from '@/prompts/scheduleAgent';
+import ReactMarkdown from 'react-markdown';
 
 export default function ChatInterface() {
   const [messages, setMessages] = useState<Message[]>([{
     role: 'assistant',
-    content: 'Hello! How can I help you with your booking today?'
+    content: 'Olá! Como posso ajudar você com sua agenda hoje?'
   }]);
   const [inputMessage, setInputMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -25,14 +27,58 @@ export default function ChatInterface() {
       content: inputMessage
     };
 
+    let bookingAssistantPromptUpdated = bookingAssistantPrompt
+
     // Update messages with user input
     setMessages(prev => [...prev, userMessage]);
     setInputMessage('');
     setIsLoading(true);
     setStreamingResponse('');
+    let message = ''
 
     try {
-      const response = await fetch('http://54.175.159.119:8000/api/schedule/conversational-agent', {
+      const response = await fetch('http://localhost:8000/api/schedule/schedule-agent', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          messages: [
+            { role: 'system', content: scheduleAgentPrompt },
+            ...messages,
+            userMessage,
+          ]
+        }),
+      });
+
+      const responseData = await response.json();
+      console.log('Response data:', responseData);  // This will show the functionResult
+
+      if (responseData.functionResult.message) {
+        message = responseData.functionResult.message
+      }
+      
+      // You can now access responseData.functionResult
+      if (responseData.functionResult) {
+        console.log('Function result:', responseData.functionResult);
+      }
+
+    } catch (error) {
+      console.error('Error:', error);
+      const errorMessage: Message = {
+        role: 'assistant',
+        content: 'Desculpe, encontrei um erro ao processar sua solicitação.'
+      };
+      setMessages(prev => [...prev, errorMessage]);
+    }
+
+    try {
+      if (message.length > 0) {
+        bookingAssistantPromptUpdated = bookingAssistantPromptUpdated.split('<<<')[1] + '\n' + '<<<' + message + '<<<'
+      }
+      
+      const response = await fetch('http://localhost:8000/api/schedule/conversational-agent', {
+      //const response = await fetch('http://54.175.159.119:8000/api/schedule/conversational-agent', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -90,7 +136,7 @@ export default function ChatInterface() {
       console.error('Error:', error);
       const errorMessage: Message = {
         role: 'assistant',
-        content: 'Sorry, I encountered an error while processing your request.'
+        content: 'Desculpe, encontrei um erro ao processar sua solicitação.'
       };
       setMessages(prev => [...prev, errorMessage]);
     } finally {
@@ -103,7 +149,7 @@ export default function ChatInterface() {
   const handleClearChat = () => {
     setMessages([{
       role: 'assistant',
-      content: 'Hello! How can I help you with your booking today?'
+      content: 'Olá! Como posso ajudar você com sua agenda hoje?'
     }]);
   };
 
@@ -145,14 +191,40 @@ export default function ChatInterface() {
                 message.role === 'assistant'
                   ? 'bg-zinc-800 rounded-xl rounded-tl-none max-w-[80%]'
                   : 'bg-[#6467F2] rounded-xl rounded-tr-none max-w-[80%] self-end'
-              } p-4`}
+              } p-4 whitespace-pre-line`}
             >
-              {message.content}
+              {message.role === 'assistant' ? (
+                <ReactMarkdown
+                  components={{
+                    p: ({children}) => <p className="mb-2 last:mb-0">{children}</p>,
+                    ul: ({children}) => <ul className="list-disc ml-4 mb-2">{children}</ul>,
+                    ol: ({children}) => <ol className="list-decimal ml-4 mb-2">{children}</ol>,
+                    li: ({children}) => <li>{children}</li>,
+                    strong: ({children}) => <strong className="font-bold">{children}</strong>,
+                  }}
+                >
+                  {message.content}
+                </ReactMarkdown>
+              ) : (
+                message.content
+              )}
             </div>
           ))}
           {isLoading && (
-            <div className="bg-zinc-800 rounded-xl rounded-tl-none max-w-[80%] p-4">
-              {streamingResponse || (
+            <div className="bg-zinc-800 rounded-xl rounded-tl-none max-w-[80%] p-4 whitespace-pre-line">
+              {streamingResponse ? (
+                <ReactMarkdown
+                  components={{
+                    p: ({children}) => <p className="mb-2 last:mb-0">{children}</p>,
+                    ul: ({children}) => <ul className="list-disc ml-4 mb-2">{children}</ul>,
+                    ol: ({children}) => <ol className="list-decimal ml-4 mb-2">{children}</ol>,
+                    li: ({children}) => <li>{children}</li>,
+                    strong: ({children}) => <strong className="font-bold">{children}</strong>,
+                  }}
+                >
+                  {streamingResponse}
+                </ReactMarkdown>
+              ) : (
                 <div className="flex gap-2">
                   <div className="animate-bounce">●</div>
                   <div className="animate-bounce delay-100">●</div>
