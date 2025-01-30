@@ -62,6 +62,5 @@ ${formatDateTimeForPrompt()}
 Nota: Sempre utilize essas informações de data e hora como referência ao discutir disponibilidade e agendamentos.
 
 Base de conhecimento sobre a agenda de Pedro:
-<<< >>>
 
 `; 

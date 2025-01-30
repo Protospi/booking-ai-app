@@ -74,7 +74,7 @@ export default function ChatInterface() {
 
     try {
       if (message.length > 0) {
-        bookingAssistantPromptUpdated = bookingAssistantPromptUpdated.split('<<<')[1] + '\n' + '<<<' + message + '<<<'
+        bookingAssistantPromptUpdated = bookingAssistantPromptUpdated + '\n' + message
       }
       
       const response = await fetch('http://localhost:8000/api/schedule/conversational-agent', {
@@ -85,7 +85,7 @@ export default function ChatInterface() {
         },
         body: JSON.stringify({
           messages: [
-            { role: 'system', content: bookingAssistantPrompt },
+            { role: 'system', content: bookingAssistantPromptUpdated },
             ...messages,
             userMessage
           ]
