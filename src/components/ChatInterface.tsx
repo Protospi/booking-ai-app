@@ -54,13 +54,30 @@ export default function ChatInterface() {
       const responseData = await response.json();
       console.log('Response data:', responseData);  // This will show the functionResult
 
-      if (responseData.functionResult.message) {
-        message = responseData.functionResult.message
-      }
-      
-      // You can now access responseData.functionResult
       if (responseData.functionResult) {
-        console.log('Function result:', responseData.functionResult);
+        if (responseData.functionResult.message) {
+          message = responseData.functionResult.message;
+        }
+        
+        // Dispatch events based on functionResult
+        if (responseData.functionResult.date) {
+          // Dispatch date selection event
+          const dateEvent = new CustomEvent('selectDate', {
+            detail: {
+              date: responseData.functionResult.date
+            }
+          });
+          window.dispatchEvent(dateEvent);
+        }
+        
+        // Existing function call event
+        const event = new CustomEvent('functionCall', {
+          detail: {
+            type: responseData.functionResult.type,
+            message: responseData.functionResult.message
+          }
+        });
+        window.dispatchEvent(event);
       }
 
     } catch (error) {
@@ -76,6 +93,8 @@ export default function ChatInterface() {
       if (message.length > 0) {
         bookingAssistantPromptUpdated = bookingAssistantPromptUpdated + '\n' + message
       }
+
+      console.log('bookingAssistantPromptUpdated', bookingAssistantPromptUpdated)
       
       const response = await fetch('http://localhost:8000/api/schedule/conversational-agent', {
       //const response = await fetch('http://54.175.159.119:8000/api/schedule/conversational-agent', {
