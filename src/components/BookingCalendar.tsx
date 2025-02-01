@@ -102,6 +102,7 @@ export default function BookingCalendar() {
 
   // Update the date selection to fetch data
   const handleDateSelect = (date: Date) => {
+    console.log('DATE:', date);
     setSelectedDate(date);
     fetchScheduleData(date);
   };
@@ -126,8 +127,8 @@ export default function BookingCalendar() {
   };
 
   const monthNames = [
-    'January', 'February', 'March', 'April', 'May', 'June',
-    'July', 'August', 'September', 'October', 'November', 'December'
+    'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+    'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
   ];
 
   const navigateMonth = (direction: 'prev' | 'next') => {
@@ -158,7 +159,7 @@ export default function BookingCalendar() {
             }`}
             onClick={() => handleViewToggle('calendar')}
           >
-            Calendar
+            Calendário
           </button>
           <button 
             className={`px-4 py-2 rounded-md transition-all ${
@@ -166,14 +167,14 @@ export default function BookingCalendar() {
             }`}
             onClick={() => handleViewToggle('ai')}
           >
-            AI Report
+            Relatório
           </button>
         </div>
       </div>
 
       {/* Content Container */}
       <div className={view === 'calendar' ? 'block' : 'hidden'}>
-        <div className="bg-zinc-800 rounded-xl p-4 h-[500px]">
+        <div className="bg-zinc-800 rounded-xl p-4 h-[550px]">
           {selectedDate ? (
             // Day View
             <div className="h-full flex flex-col">
@@ -183,10 +184,10 @@ export default function BookingCalendar() {
                   className="flex items-center text-white hover:text-[#6467F2] transition-colors"
                 >
                   <ChevronLeftIcon className="w-5 h-5 mr-1" />
-                  Back to Calendar
+                  Voltar para o Calendário
                 </button>
                 <div className="text-white font-medium">
-                  {selectedDate.toLocaleDateString('en-US', { 
+                  {selectedDate.toLocaleDateString('pt-BR', { 
                     weekday: 'long',
                     month: 'long',
                     day: 'numeric'
@@ -250,7 +251,7 @@ export default function BookingCalendar() {
               </div>
               <br></br>
               <div className="grid grid-cols-7 gap-[1rem] text-center mb-2">
-                {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
+                {['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'].map((day) => (
                   <div key={day} className="text-zinc-400 text-sm py-1.5">
                     {day}
                   </div>

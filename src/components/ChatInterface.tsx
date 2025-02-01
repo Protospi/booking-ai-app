@@ -8,7 +8,10 @@ import ReactMarkdown from 'react-markdown';
 export default function ChatInterface() {
   const [messages, setMessages] = useState<Message[]>([{
     role: 'assistant',
-    content: 'Olá! Como posso ajudar você com sua agenda hoje?'
+    content: `Olá!  👋 
+    Sou a Izi!  😊
+    Assistente digital da empresa Smart Talks!  💬
+    Posso te ajudar a agendar uma reunião com nosso time comercial? 📅` 
   }]);
   const [inputMessage, setInputMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -64,9 +67,10 @@ export default function ChatInterface() {
           // Dispatch date selection event
           const dateEvent = new CustomEvent('selectDate', {
             detail: {
-              date: responseData.functionResult.date
+              date: new Date(responseData.functionResult.date).setHours(new Date(responseData.functionResult.date).getHours() + 3)
             }
           });
+    
           window.dispatchEvent(dateEvent);
         }
         
@@ -94,7 +98,7 @@ export default function ChatInterface() {
         bookingAssistantPromptUpdated = bookingAssistantPromptUpdated + '\n' + message
       }
 
-      console.log('bookingAssistantPromptUpdated', bookingAssistantPromptUpdated)
+      // console.log('bookingAssistantPromptUpdated', bookingAssistantPromptUpdated)
       
       const response = await fetch('http://localhost:8000/api/schedule/conversational-agent', {
       //const response = await fetch('http://54.175.159.119:8000/api/schedule/conversational-agent', {
@@ -168,15 +172,18 @@ export default function ChatInterface() {
   const handleClearChat = () => {
     setMessages([{
       role: 'assistant',
-      content: 'Olá! Como posso ajudar você com sua agenda hoje?'
-    }]);
+      content: `Olá!  👋 
+        Sou a Izi!  😊
+        Assistente digital da empresa Smart Talks!  💬
+        Posso te ajudar a agendar uma reunião com nosso time comercial? 📅` 
+        }]);
   };
 
   return (
-    <div className="w-1/2 bg-zinc-900 rounded-xl p-6 h-[620px] flex flex-col">
+    <div className="w-1/2 bg-zinc-900 rounded-xl p-6 h-[720px] flex flex-col">
       {/* Chat Header with Title and Clear Button */}
       <div className="flex justify-between items-center mb-4 flex-shrink-0">
-        <h2 className="text-xl font-semibold text-white">AI Booker</h2>
+        <h2 className="text-xl font-semibold text-white">Assistente de Agendamento Smart Talks</h2>
         <button
           onClick={handleClearChat}
           className="p-2 hover:bg-zinc-800 rounded-full transition-colors"
@@ -263,7 +270,7 @@ export default function ChatInterface() {
           value={inputMessage}
           onChange={(e) => setInputMessage(e.target.value)}
           onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
-          placeholder="Type your message..."
+          placeholder="Digite sua mensagem..."
           className="flex-1 bg-zinc-800 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-[#6467F2]"
         />
         <button 
@@ -271,7 +278,7 @@ export default function ChatInterface() {
           disabled={isLoading}
           className="bg-[#6467F2] px-6 py-2 rounded-lg hover:bg-opacity-90 transition-colors disabled:opacity-50"
         >
-          Send
+          Enviar
         </button>
       </div>
     </div>

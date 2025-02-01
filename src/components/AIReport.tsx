@@ -15,6 +15,19 @@ interface AIReportProps {
 export default function AIReport({ onClear }: AIReportProps) {
   const [functionCalls, setFunctionCalls] = useState<FunctionCall[]>([]);
 
+  const getDisplayType = (type: string) => {
+    switch (type.toLowerCase()) {
+      case 'schedule':
+        return 'Verificação de disponibilidade';
+      case 'booking':
+        return 'Registro de reunião';
+      case 'cancellation':
+        return 'Cancelamento de Reunião';
+      default:
+        return type;
+    }
+  };
+
   useEffect(() => {
     // Event listener for function calls
     const handleFunctionCall = (event: CustomEvent) => {
@@ -46,17 +59,17 @@ export default function AIReport({ onClear }: AIReportProps) {
   };
 
   return (
-    <div className="bg-zinc-800 rounded-xl p-4 h-[500px] overflow-y-auto">
-      <h2 className="text-xl font-semibold mb-4">Function Calls</h2>
+    <div className="bg-zinc-800 rounded-xl p-4 h-[550px] overflow-y-auto">
+      <h2 className="text-xl font-semibold mb-4">Execução de Funções</h2>
       {functionCalls.length === 0 ? (
         <div className="text-center text-gray-400">
-          No function calls recorded
+          Nenhuma função executada
         </div>
       ) : (
         <div className="space-y-3">
           {functionCalls.map((call, index) => (
             <div key={index} className="border-b border-zinc-700 pb-2">
-              <div className="font-medium text-[#6467F2]">• {call.type}</div>
+              <div className="font-medium text-[#6467F2]">• {getDisplayType(call.type)}</div>
               <div className="text-sm text-gray-300 mt-1">{call.message}</div>
               <div className="text-xs text-gray-500 mt-1">{call.timestamp}</div>
             </div>
