@@ -5,6 +5,7 @@ import { bookingAssistantPrompt } from '@/prompts/conversationalAgent';
 import { scheduleAgentPrompt } from '@/prompts/scheduleAgent';
 import ReactMarkdown from 'react-markdown';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+import AudioPlayer from './AudioDownload';
 
 // Add S3 client configuration after imports
 const s3 = new S3Client({
@@ -165,6 +166,7 @@ export default function ChatInterface() {
     let messageContent = inputMessage;
     let userInput = inputMessage;
     let bookingAssistantPromptUpdate = bookingAssistantPrompt;
+    let fullResponse = '';
 
     try {
       if (audioBlob) {
@@ -200,110 +202,149 @@ export default function ChatInterface() {
           userMessage,
           messages: [
             { role: 'system', content: scheduleAgentPrompt },
-            ...messages
+            ...messages.map(msg => ({
+              role: msg.role,
+              content: typeof msg.content === 'object' ? 
+                `audio:${msg.content.audioUrl}${msg.content.text ? `|text:${msg.content.text}` : ''}` : 
+                msg.content
+            }))
           ]
         }),
       });
 
-      const responseData = await scheduleResponse.json();
-      console.log('Response data:', responseData);  // This will show the functionResult
+      if (scheduleResponse.ok) {
+        const responseData = await scheduleResponse.json();
+        console.log('Response data:', responseData);
 
-      if (responseData.functionResult) {
-        if (responseData.functionResult.message) {
-          message = responseData.functionResult.message;
-        }
-        
-        // Dispatch events based on functionResult
-        if (responseData.functionResult.date) {
-          // Dispatch date selection event
-          const dateEvent = new CustomEvent('selectDate', {
+        if (responseData.functionResult) {
+          if (responseData.functionResult.message) {
+            message = responseData.functionResult.message;
+          }
+          
+          if (responseData.functionResult.date) {
+            const dateEvent = new CustomEvent('selectDate', {
+              detail: {
+                date: new Date(responseData.functionResult.date).setHours(new Date(responseData.functionResult.date).getHours() + 3)
+              }
+            });
+            window.dispatchEvent(dateEvent);
+          }
+          
+          const event = new CustomEvent('functionCall', {
             detail: {
-              date: new Date(responseData.functionResult.date).setHours(new Date(responseData.functionResult.date).getHours() + 3)
+              type: responseData.functionResult.type,
+              message: responseData.functionResult.message
             }
           });
-    
-          window.dispatchEvent(dateEvent);
+          window.dispatchEvent(event);
         }
-        
-        // Existing function call event
-        const event = new CustomEvent('functionCall', {
-          detail: {
-            type: responseData.functionResult.type,
-            message: responseData.functionResult.message
-          }
-        });
-        window.dispatchEvent(event);
+      } else {
+        console.log('Schedule agent skipped or returned non-200 response');
       }
 
       if (message.length > 0) {
-        bookingAssistantPromptUpdate = bookingAssistantPromptUpdate + '\n' + message
+        bookingAssistantPromptUpdate = bookingAssistantPromptUpdate + '\n' + message;
       }
 
-      const chatResponse = await fetch('http://localhost:8000/api/schedule/conversational-agent', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          input: {
-            type: messageType,
-            content: userInput
+      if(messageType === 'text') {
+        const chatResponse = await fetch('http://localhost:8000/api/schedule/conversational-agent', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
           },
-          userMessage,
-          messages: [
-            { role: 'system', content: bookingAssistantPromptUpdate },
-            ...messages
-          ]
-        }),
-      });
-
-      if (!chatResponse.ok) throw new Error('Failed to fetch from backend');
-
-      const reader = chatResponse.body?.getReader();
-      if (!reader) throw new Error('No reader available');
-
-      const decoder = new TextDecoder();
-      let fullResponse = '';
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        
-        const chunk = decoder.decode(value);
-        const lines = chunk.split('\n').filter(line => line.trim());
-        
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            const jsonStr = line.slice(5);
-            if (jsonStr === '[DONE]') continue;
-            
-            try {
-              const json = JSON.parse(jsonStr);
-              if (json.content) {
-                fullResponse += json.content;
-                setStreamingResponse(fullResponse);
+          body: JSON.stringify({
+            input: {
+              type: messageType,
+              content: userInput
+            },
+            userMessage,
+            messages: [
+              { role: 'system', content: bookingAssistantPromptUpdate },
+              ...messages.map(msg => ({
+                role: msg.role,
+                content: typeof msg.content === 'object' ? 
+                  `audio:${msg.content.audioUrl}${msg.content.text ? `|text:${msg.content.text}` : ''}` : 
+                  msg.content
+              }))
+            ]
+          }),
+        });
+  
+        if (!chatResponse.ok) throw new Error('Failed to fetch from backend');
+  
+        const reader = chatResponse.body?.getReader();
+        if (!reader) throw new Error('No reader available');
+  
+        const decoder = new TextDecoder();
+  
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          
+          const chunk = decoder.decode(value);
+          const lines = chunk.split('\n').filter(line => line.trim());
+          
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              const jsonStr = line.slice(5);
+              if (jsonStr === '[DONE]') continue;
+              
+              try {
+                const json = JSON.parse(jsonStr);
+                if (json.content) {
+                  fullResponse += json.content;
+                  setStreamingResponse(fullResponse);
+                }
+              } catch (e) {
+                console.error('Error parsing JSON:', e);
               }
-            } catch (e) {
-              console.error('Error parsing JSON:', e);
             }
           }
         }
+      } else {
+        const chatResponse = await fetch('http://localhost:8000/api/schedule/conversational-agent', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            input: {
+              type: messageType,
+              content: userInput
+            },
+            userMessage,
+            messages: [
+              { role: 'system', content: bookingAssistantPromptUpdate },
+              ...messages.map(msg => ({
+                role: msg.role,
+                // Convert any object content to string for API compatibility
+                content: typeof msg.content === 'object' ? 
+                  `audio:${msg.content.audioUrl}${msg.content.text ? `|text:${msg.content.text}` : ''}` : 
+                  msg.content
+              }))
+            ]
+          }),
+        });
+        
+        fullResponse = await chatResponse.json();
+        console.log('fullResponse type:', typeof fullResponse, 'content:', fullResponse);
       }
 
       // Add assistant's response to messages
       const assistantMessage: Message = {
         role: 'assistant',
-        content: fullResponse
+        content: fullResponse.audioUrl ? 
+          {
+            audioUrl: fullResponse.audioUrl,
+            text: fullResponse.text
+          } :
+          fullResponse
       };
       setMessages(prev => [...prev, assistantMessage]);
 
     } catch (error) {
-      console.error('Error:', error);
-      const errorMessage: Message = {
-        role: 'assistant',
-        content: 'Desculpe, encontrei um erro ao processar sua solicitação.'
-      };
-      setMessages(prev => [...prev, errorMessage]);
+      console.log('Schedule agent error handled:', error);
+      // Don't throw the error, just log it and continue
     } finally {
       setIsLoading(false);
       setStreamingResponse('');
@@ -362,6 +403,39 @@ export default function ChatInterface() {
     });
   }, []);
 
+  // First, create a helper component to handle message content rendering
+  const MessageRenderer = ({ content }: { content: any }) => {
+    // If content is a plain string, check if it's an audio message
+    if (typeof content === 'string') {
+      if (content.startsWith('audio:')) {
+        const [audioUrl] = content.replace('audio:', '').split('|text:');
+        return <AudioPlayer audioUrl={audioUrl} />;
+      }
+      
+      return (
+        <ReactMarkdown
+          components={{
+            p: ({children}) => <p className="mb-2 last:mb-0">{children}</p>,
+            ul: ({children}) => <ul className="list-disc ml-4 mb-2">{children}</ul>,
+            ol: ({children}) => <ol className="list-decimal ml-4 mb-2">{children}</ol>,
+            li: ({children}) => <li>{children}</li>,
+            strong: ({children}) => <strong className="font-bold">{children}</strong>,
+          }}
+        >
+          {content}
+        </ReactMarkdown>
+      );
+    }
+
+    // If content is an object with audioUrl
+    if (content.audioUrl) {
+      return <AudioPlayer audioUrl={content.audioUrl} />;
+    }
+
+    // Fallback for any other type of content
+    return <div>{JSON.stringify(content)}</div>;
+  };
+
   return (
     <div className="w-1/2 bg-zinc-900 rounded-xl p-6 h-[720px] flex flex-col">
       {/* Chat Header with Title and Clear Button */}
@@ -398,22 +472,16 @@ export default function ChatInterface() {
               key={index}
               className={`${
                 message.role === 'assistant'
-                  ? 'bg-[#6467F2] rounded-xl rounded-tl-none max-w-[80%]'
+                  ? 'bg-[#6467F2] rounded-xl rounded-tl-none' + 
+                    ((typeof message.content === 'object' && message.content.audioUrl) || 
+                     (typeof message.content === 'string' && message.content.startsWith('audio:'))
+                      ? ' w-[300px]'
+                      : ' max-w-[80%]')
                   : 'bg-zinc-800 rounded-xl rounded-tr-none max-w-[80%] self-end'
               } p-4 whitespace-pre-line`}
             >
               {message.role === 'assistant' ? (
-                <ReactMarkdown
-                  components={{
-                    p: ({children}) => <p className="mb-2 last:mb-0">{children}</p>,
-                    ul: ({children}) => <ul className="list-disc ml-4 mb-2">{children}</ul>,
-                    ol: ({children}) => <ol className="list-decimal ml-4 mb-2">{children}</ol>,
-                    li: ({children}) => <li>{children}</li>,
-                    strong: ({children}) => <strong className="font-bold">{children}</strong>,
-                  }}
-                >
-                  {message.content}
-                </ReactMarkdown>
+                <MessageRenderer content={message.content} />
               ) : message.content.startsWith('audio:') ? (
                 <AudioMessage 
                   audioUrl={message.content.replace('audio:', '')}
@@ -424,27 +492,29 @@ export default function ChatInterface() {
               )}
             </div>
           ))}
-          {isLoading && (
+          {/* Only show loading dots when loading AND not streaming */}
+          {isLoading && !streamingResponse && (
+            <div className="flex items-center gap-2 max-w-[80%]">
+              <div className="flex gap-2">
+                <div className="w-2 h-2 rounded-full bg-current animate-wave"></div>
+                <div className="w-2 h-2 rounded-full bg-current animate-wave [animation-delay:0.2s]"></div>
+                <div className="w-2 h-2 rounded-full bg-current animate-wave [animation-delay:0.4s]"></div>
+              </div>
+            </div>
+          )}
+          {streamingResponse && (
             <div className="bg-[#6467F2] rounded-xl rounded-tl-none max-w-[80%] p-4 whitespace-pre-line">
-              {streamingResponse ? (
-                <ReactMarkdown
-                  components={{
-                    p: ({children}) => <p className="mb-2 last:mb-0">{children}</p>,
-                    ul: ({children}) => <ul className="list-disc ml-4 mb-2">{children}</ul>,
-                    ol: ({children}) => <ol className="list-decimal ml-4 mb-2">{children}</ol>,
-                    li: ({children}) => <li>{children}</li>,
-                    strong: ({children}) => <strong className="font-bold">{children}</strong>,
-                  }}
-                >
-                  {streamingResponse}
-                </ReactMarkdown>
-              ) : (
-                <div className="flex gap-2">
-                  <div className="animate-bounce">●</div>
-                  <div className="animate-bounce delay-100">●</div>
-                  <div className="animate-bounce delay-200">●</div>
-                </div>
-              )}
+              <ReactMarkdown
+                components={{
+                  p: ({children}) => <p className="mb-2 last:mb-0">{children}</p>,
+                  ul: ({children}) => <ul className="list-disc ml-4 mb-2">{children}</ul>,
+                  ol: ({children}) => <ol className="list-decimal ml-4 mb-2">{children}</ol>,
+                  li: ({children}) => <li>{children}</li>,
+                  strong: ({children}) => <strong className="font-bold">{children}</strong>,
+                }}
+              >
+                {streamingResponse}
+              </ReactMarkdown>
             </div>
           )}
           <div ref={messagesEndRef} />
