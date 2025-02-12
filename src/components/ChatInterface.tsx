@@ -6,6 +6,7 @@ import { scheduleAgentPrompt } from '@/prompts/scheduleAgent';
 import ReactMarkdown from 'react-markdown';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import AudioPlayer from './AudioDownload';
+import { apiBaseUrl } from '@/config/env';
 
 // Add S3 client configuration after imports
 const s3 = new S3Client({
@@ -189,7 +190,7 @@ export default function ChatInterface() {
       setStreamingResponse('');
       let message = ''
 
-      const scheduleResponse = await fetch('http://localhost:8000/api/schedule/schedule-agent', {
+      const scheduleResponse = await fetch(`${apiBaseUrl}/api/schedule/schedule-agent`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -245,9 +246,9 @@ export default function ChatInterface() {
       if (message.length > 0) {
         bookingAssistantPromptUpdate = bookingAssistantPromptUpdate + '\n' + message;
       }
-
+      console.log('base url', apiBaseUrl)
       if(messageType === 'text') {
-        const chatResponse = await fetch('http://localhost:8000/api/schedule/conversational-agent', {
+        const chatResponse = await fetch(`${apiBaseUrl}/api/schedule/conversational-agent`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -302,7 +303,7 @@ export default function ChatInterface() {
           }
         }
       } else {
-        const chatResponse = await fetch('http://localhost:8000/api/schedule/conversational-agent', {
+        const chatResponse = await fetch(`${apiBaseUrl}/api/schedule/conversational-agent`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
